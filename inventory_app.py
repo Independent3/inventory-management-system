@@ -59,6 +59,18 @@ class DatabaseManager:
             #Release the messenger (Clean up)
             cursor.close()
 
+    def update_stock(self, product_id , quantity):
+        if self.connection is None or not self.connection.is_connected():
+            print("No connection! Opening it now...")
+            self.open_connection()
+        cursor = self.connection.cursor()
+        query = "UPDATE products SET quantity = quantity + %s WHERE id = %s;"
+        cursor.execute(query, (quantity, product_id))
+        self.connection.commit()
+        cursor.close()
+
+
+
     def close_connection(self):
         """Hangs up the phone line."""
         if self.connection and self.connection.is_connected():
@@ -70,10 +82,10 @@ if __name__ == "__main__":
     db = DatabaseManager(
         host="localhost",
         user="root",
-        pwd="PASSWORD_HERE",
+        pwd="YOUR_PASSWORD",
         db_name="inventory_system"
     )
-
+    db.update_stock(1, 10)
     #Get raw tuples from DB
     raw_data = db.get_all_products()
 
