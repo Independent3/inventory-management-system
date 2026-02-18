@@ -20,6 +20,16 @@ class Product:
 
         return f"ID: {self.id} | Name: {self.name} | Sku: {self.sku} | Quantity: {self.quantity} | Price: {self.price:.2f}"
 
+class Supplier:
+    def __init__(self, id , name , email):
+        self.id = id
+        self.name = name
+        self.email = email
+
+    def __str__(self):
+        return f"ID: {self.id} | Name: {self.name} | Email: {self.email}"
+
+
 class DatabaseManager:
     def __init__(self, host, user, pwd, db_name):
         self.host = host
@@ -99,11 +109,42 @@ class DatabaseManager:
         finally:
             cursor.close()
 
+    def insert_supplier(self, name, email):
+        if self.connection is None or not self.connection.is_connected():
+            print("No connection! Opening it now...")
+            self.open_connection()
+        cursor = self.connection.cursor()
+        try:
+            query = "INSERT INTO SUPPLIERS (name,email) VALUES (%s , %s )"
+            cursor.execute(query , (name,email,))
+            self.connection.commit()
+        except mysql.connector.IntegrityError:
+            print("Error: Email already exists")
+        finally:
+            cursor.close()
+
+    def get_all_suppliers(self):
+        if self.connection is None or not self.connection.is_connected():
+            print("No connection! Opening it now...")
+            self.open_connection()
+        cursor = self.connection.cursor()
+        query = "SELECT * FROM SUPPLIERS"
+        cursor.execute(query,)
+        result = cursor.fetchall()
+        cursor.close()
+        return result
+
+
+
+
+
     def close_connection(self):
 
         if self.connection and self.connection.is_connected():
             self.connection.close()
             print("MySQL connection closed")
+
+
 
 
 if __name__ == "__main__":
@@ -120,6 +161,8 @@ if __name__ == "__main__":
         print("2. Add Product")
         print("3. Update Stock")
         print("4. Delete Product")
+        print("5. View Suppliers")
+        print("6. Add Supplier")
         print("0. Exit")
 
         choice = input("Select an option: ")
@@ -188,6 +231,27 @@ if __name__ == "__main__":
             except ValueError:
                 print("Error: Please enter an existing ID")
                 continue
+        elif choice == "5":
+            suppliers = db.get_all_suppliers()
+            for supplier in suppliers:
+                print(Supplier(*supplier))
+        elif choice == "6":
+            email = input("Enter the Email")
+            if not email:
+                print("Error: Empty email is not allowed")
+                continue
+            if " " in email:
+                print("Error: Email should not contain spaces")
+                continue
+            if not email[0].isalpha():
+                print("Error: Email should start with A-z or a-z")
+                continue
+            name = input("Enter the Name").strip()
+            if not name:
+                print("Error: Name can't be empty")
+                continue
+            db.insert_supplier(name,email)
+
         elif choice == "0":
             db.close_connection()
             break
