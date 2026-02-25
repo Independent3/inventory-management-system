@@ -29,6 +29,15 @@ class Supplier:
     def __str__(self):
         return f"ID: {self.id} | Name: {self.name} | Email: {self.email}"
 
+class ProductSupplier:
+    def __init__(self, Product_ID , Supplier_ID , wholesale_price, lead_time):
+        self.Product_ID = Product_ID
+        self.Supplier_ID = Supplier_ID
+        self.Wholesale_price = float(wholesale_price)
+        self.lead_time = int(lead_time)
+
+    def __str__(self):
+        return f"Prod ID: {self.Product_ID} | Supp ID: {self.Supplier_ID} | Cost: {self.Wholesale_price:.2f} | Days: {self.lead_time}"
 
 class DatabaseManager:
     def __init__(self, host, user, pwd, db_name):
@@ -134,9 +143,19 @@ class DatabaseManager:
         cursor.close()
         return result
 
-
-
-
+    def link_product_to_supplier(self , p_id , s_id , price , lead_time):
+        if self.connection is None or not self.connection.is_connected():
+            print("No connection! Opening it now...")
+            self.open_connection()
+        cursor = self.connection.cursor()
+        try:
+            query = "INSERT INTO product_suppliers (PRODUCT_ID, SUPPLIER_ID, WHOLESALE_PRICE, LEAD_TIME_DAYS) VALUES (%s, %s, %s, %s)"
+            cursor.execute(query,(p_id, s_id, price, lead_time,))
+            self.connection.commit()
+        except mysql.connector.Error as err:
+            print(f"Error: Could not link. Details: {err}")
+        finally:
+            cursor.close()
 
     def close_connection(self):
 
@@ -163,6 +182,7 @@ if __name__ == "__main__":
         print("4. Delete Product")
         print("5. View Suppliers")
         print("6. Add Supplier")
+        print("7. Link Product to Supplier")
         print("0. Exit")
 
         choice = input("Select an option: ")
@@ -252,8 +272,21 @@ if __name__ == "__main__":
                 continue
             db.insert_supplier(name,email)
 
+        elif choice == '7':
+            try:
+                print("\n--- Link Product to Supplier ---")
+                p_id = int(input("Enter Product ID: "))
+                s_id = int(input("Enter Supplier ID: "))
+                price = float(input("Enter Wholesale Price: "))
+                days = int(input("Enter Lead Time (Days): "))
+
+                db.link_product_to_supplier(p_id, s_id, price, days)
+
+            except ValueError:
+                print("Error: Invalid input. Please enter numbers for IDs, price, and days.")
+
         elif choice == "0":
             db.close_connection()
             break
         else:
-            print("\n[!] Invalid input. Please enter a number between 0 and 4.")
+            print("\n[!] Invalid input. Please enter a number between 0 and 7.")
