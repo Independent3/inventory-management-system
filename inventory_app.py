@@ -37,7 +37,7 @@ class ProductSupplier:
         self.lead_time = int(lead_time)
 
     def __str__(self):
-        return f"Prod ID: {self.Product_ID} | Supp ID: {self.Supplier_ID} | Cost: {self.Wholesale_price:.2f} | Days: {self.lead_time}"
+        return f"Product: {self.Product_ID} | Supplier: {self.Supplier_ID} | Cost: {self.Wholesale_price:.2f} | Days: {self.lead_time}"
 
 class DatabaseManager:
     def __init__(self, host, user, pwd, db_name):
@@ -157,6 +157,25 @@ class DatabaseManager:
         finally:
             cursor.close()
 
+    def get_all_product_suppliers(self):
+        if self.connection is None or not self.connection.is_connected():
+            print("No connection! Opening it now...")
+            self.open_connection()
+        cursor = self.connection.cursor()
+        query = "SELECT p.NAME , s.NAME , ps.WHOLESALE_PRICE , ps.LEAD_TIME_DAYS FROM PRODUCT_SUPPLIERS ps JOIN PRODUCTS p ON ps.PRODUCT_ID = p.ID JOIN SUPPLIERS s ON ps.SUPPLIER_ID = s.SUPPLIER_ID;"
+        try:
+            cursor.execute(query)
+            result = cursor.fetchall()
+            return result
+        except mysql.connector.Error as err:
+            print(f"Error: {err}")
+            return []
+
+        finally:
+            cursor.close()
+
+
+
     def close_connection(self):
 
         if self.connection and self.connection.is_connected():
@@ -170,7 +189,7 @@ if __name__ == "__main__":
     db = DatabaseManager(
         host="localhost",
         user="root",
-        pwd="YOUR PASSWORD HERE",
+        pwd="YOUR_PASSWORD_HERE",
         db_name="inventory_system"
     )
 
@@ -183,6 +202,7 @@ if __name__ == "__main__":
         print("5. View Suppliers")
         print("6. Add Supplier")
         print("7. Link Product to Supplier")
+        print("8. View Product-Supplier Links")
         print("0. Exit")
 
         choice = input("Select an option: ")
@@ -256,7 +276,7 @@ if __name__ == "__main__":
             for supplier in suppliers:
                 print(Supplier(*supplier))
         elif choice == "6":
-            email = input("Enter the Email")
+            email = input("Enter the Email: ")
             if not email:
                 print("Error: Empty email is not allowed")
                 continue
@@ -266,7 +286,7 @@ if __name__ == "__main__":
             if not email[0].isalpha():
                 print("Error: Email should start with A-z or a-z")
                 continue
-            name = input("Enter the Name").strip()
+            name = input("Enter the Name: ").strip()
             if not name:
                 print("Error: Name can't be empty")
                 continue
@@ -285,8 +305,17 @@ if __name__ == "__main__":
             except ValueError:
                 print("Error: Invalid input. Please enter numbers for IDs, price, and days.")
 
+        elif choice == "8":
+            links = db.get_all_product_suppliers()
+            if not links:
+                print("\n[!] No links found in the database.")
+            else:
+                print("\n--- Current Product-Supplier Links ---")
+                for row in links:
+                    print(ProductSupplier(*row))
+
         elif choice == "0":
             db.close_connection()
             break
         else:
-            print("\n[!] Invalid input. Please enter a number between 0 and 7.")
+            print("\n[!] Invalid input. Please enter a number between 0 and 8.")
