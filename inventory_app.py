@@ -1,200 +1,254 @@
+import os
 import mysql.connector
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class Product:
-    def __init__(self, id, sku, quantity, name, price):
-        self.id = id
+    def __init__(self, product_id, sku, quantity, name, price):
+        self.product_id = product_id
         self.sku = sku
-        if quantity is None:
-            self.quantity = 0
-        else:
-            self.quantity = quantity
+        self.quantity = 0 if quantity is None else quantity
         self.name = name
         self.price = float(price)
 
     def apply_discount(self, percentage):
-        self.price = (1 - (percentage / 100)) * self.price
+        if percentage < 0 or percentage > 100:
+            raise ValueError("Discount must be between 0 and 100.")
+        self.price *= (1 - percentage / 100)
         return self.price
 
     def __str__(self):
+        return (
+            f"ID: {self.product_id} | Name: {self.name} | "
+            f"SKU: {self.sku} | Quantity: {self.quantity} | Price: {self.price:.2f}"
+        )
 
-        return f"ID: {self.id} | Name: {self.name} | Sku: {self.sku} | Quantity: {self.quantity} | Price: {self.price:.2f}"
 
 class Supplier:
-    def __init__(self, id , name , email):
-        self.id = id
+    def __init__(self, supplier_id, name, email):
+        self.supplier_id = supplier_id
         self.name = name
         self.email = email
 
     def __str__(self):
-        return f"ID: {self.id} | Name: {self.name} | Email: {self.email}"
+        return f"ID: {self.supplier_id} | Name: {self.name} | Email: {self.email}"
+
 
 class ProductSupplier:
-    def __init__(self, Product_ID , Supplier_ID , wholesale_price, lead_time):
-        self.Product_ID = Product_ID
-        self.Supplier_ID = Supplier_ID
-        self.Wholesale_price = float(wholesale_price)
+    def __init__(self, product_name, supplier_name, wholesale_price, lead_time):
+        self.product_name = product_name
+        self.supplier_name = supplier_name
+        self.wholesale_price = float(wholesale_price)
         self.lead_time = int(lead_time)
 
     def __str__(self):
-        return f"Product: {self.Product_ID} | Supplier: {self.Supplier_ID} | Cost: {self.Wholesale_price:.2f} | Days: {self.lead_time}"
+        return (
+            f"Product: {self.product_name} | Supplier: {self.supplier_name} | "
+            f"Wholesale Price: {self.wholesale_price:.2f} | Lead Time: {self.lead_time} days"
+        )
+
 
 class DatabaseManager:
-    def __init__(self, host, user, pwd, db_name):
+    def __init__(self, host, user, password, db_name):
         self.host = host
         self.user = user
-        self.password = pwd
-        self.dbname = db_name
+        self.password = password
+        self.db_name = db_name
         self.connection = None
 
     def open_connection(self):
-
         try:
             self.connection = mysql.connector.connect(
                 host=self.host,
                 user=self.user,
                 password=self.password,
-                database=self.dbname
+                database=self.db_name
             )
-            print("Successfully connected to MySQL.")
+            print("Connected to MySQL successfully.")
+            return True
         except mysql.connector.Error as err:
-            print(f"Error: {err}")
+            print(f"Connection error: {err}")
+            self.connection = None
+            return False
 
+    def ensure_connection(self):
+        if self.connection is None or not self.connection.is_connected():
+            print("No active connection. Trying to reconnect...")
+            return self.open_connection()
+        return True
 
     def get_all_products(self):
-        if self.connection is None or not self.connection.is_connected():
-            print("No connection! Opening it now...")
-            self.open_connection()
+        if not self.ensure_connection():
+            return []
+
         cursor = self.connection.cursor()
         try:
-            query = "SELECT * FROM products;"
+            query = "SELECT id, sku, quantity, name, price FROM products;"
             cursor.execute(query)
-            results = cursor.fetchall()
-            return results
+            return cursor.fetchall()
         except mysql.connector.Error as err:
             print(f"Query failed: {err}")
             return []
         finally:
-            #Release the messenger (Clean up)
             cursor.close()
 
-    def update_stock(self, product_id , quantity):
-        if self.connection is None or not self.connection.is_connected():
-            print("No connection! Opening it now...")
-            self.open_connection()
-        cursor = self.connection.cursor()
-        query = "UPDATE products SET quantity = quantity + %s WHERE id = %s;"
-        cursor.execute(query, (quantity, product_id))
-        self.connection.commit()
-        affected = cursor.rowcount
-        cursor.close()
-        return affected
+    def update_stock(self, product_id, quantity_change):
+        if not self.ensure_connection():
+            return -99
 
-    def delete(self, product_id):
-        if self.connection is None or not self.connection.is_connected():
-            print("No connection! Opening it now...")
-            self.open_connection()
-        cursor = self.connection.cursor()
-        query = "DELETE FROM Products WHERE ID = %s;"
-        cursor.execute(query,(product_id,))
-        self.connection.commit()
-        affected = cursor.rowcount
-        cursor.close()
-        return affected
-
-    def insert_product(self, sku , quantity , name , price):
-        if self.connection is None or not self.connection.is_connected():
-            print("No connection! Opening it now...")
-            self.open_connection()
         cursor = self.connection.cursor()
         try:
-            query = "INSERT INTO Products (SKU, QUANTITY, NAME, PRICE) Values ( %s , %s , %s , %s)"
-            cursor.execute(query,(sku ,quantity ,name ,price,))
+            cursor.execute("SELECT quantity FROM products WHERE id = %s;", (product_id,))
+            row = cursor.fetchone()
+
+            if row is None:
+                return -1
+
+            current_quantity = row[0] if row[0] is not None else 0
+            new_quantity = current_quantity + quantity_change
+
+            if new_quantity < 0:
+                return -2
+
+            cursor.execute(
+                "UPDATE products SET quantity = %s WHERE id = %s;",
+                (new_quantity, product_id)
+            )
+            self.connection.commit()
+            return cursor.rowcount
+        except mysql.connector.Error as err:
+            print(f"Stock update failed: {err}")
+            return 0
+        finally:
+            cursor.close()
+
+    def delete_product(self, product_id):
+        if not self.ensure_connection():
+            return 0
+
+        cursor = self.connection.cursor()
+        try:
+            query = "DELETE FROM products WHERE id = %s;"
+            cursor.execute(query, (product_id,))
+            self.connection.commit()
+            return cursor.rowcount
+        except mysql.connector.Error as err:
+            print(f"Delete failed: {err}")
+            return 0
+        finally:
+            cursor.close()
+
+    def insert_product(self, sku, quantity, name, price):
+        if not self.ensure_connection():
+            return False
+
+        cursor = self.connection.cursor()
+        try:
+            query = """
+                INSERT INTO products (sku, quantity, name, price)
+                VALUES (%s, %s, %s, %s)
+            """
+            cursor.execute(query, (sku, quantity, name, price))
             self.connection.commit()
             return True
         except mysql.connector.Error as err:
-            print(f"Database Error: {err}")
+            print(f"Database error: {err}")
             return False
         finally:
             cursor.close()
 
     def insert_supplier(self, name, email):
-        if self.connection is None or not self.connection.is_connected():
-            print("No connection! Opening it now...")
-            self.open_connection()
+        if not self.ensure_connection():
+            return False
+
         cursor = self.connection.cursor()
         try:
-            query = "INSERT INTO SUPPLIERS (name,email) VALUES (%s , %s )"
-            cursor.execute(query , (name,email,))
+            query = "INSERT INTO suppliers (name, email) VALUES (%s, %s);"
+            cursor.execute(query, (name, email))
             self.connection.commit()
+            return True
         except mysql.connector.IntegrityError:
-            print("Error: Email already exists")
+            print("Error: this email already exists.")
+            return False
+        except mysql.connector.Error as err:
+            print(f"Database error: {err}")
+            return False
         finally:
             cursor.close()
 
     def get_all_suppliers(self):
-        if self.connection is None or not self.connection.is_connected():
-            print("No connection! Opening it now...")
-            self.open_connection()
-        cursor = self.connection.cursor()
-        query = "SELECT * FROM SUPPLIERS"
-        cursor.execute(query,)
-        result = cursor.fetchall()
-        cursor.close()
-        return result
+        if not self.ensure_connection():
+            return []
 
-    def link_product_to_supplier(self , p_id , s_id , price , lead_time):
-        if self.connection is None or not self.connection.is_connected():
-            print("No connection! Opening it now...")
-            self.open_connection()
         cursor = self.connection.cursor()
         try:
-            query = "INSERT INTO product_suppliers (PRODUCT_ID, SUPPLIER_ID, WHOLESALE_PRICE, LEAD_TIME_DAYS) VALUES (%s, %s, %s, %s)"
-            cursor.execute(query,(p_id, s_id, price, lead_time,))
-            self.connection.commit()
+            query = "SELECT id, name, email FROM suppliers;"
+            cursor.execute(query)
+            return cursor.fetchall()
         except mysql.connector.Error as err:
-            print(f"Error: Could not link. Details: {err}")
+            print(f"Query failed: {err}")
+            return []
+        finally:
+            cursor.close()
+
+    def link_product_to_supplier(self, product_id, supplier_id, wholesale_price, lead_time):
+        if not self.ensure_connection():
+            return False
+
+        cursor = self.connection.cursor()
+        try:
+            query = """
+                INSERT INTO product_suppliers
+                (product_id, supplier_id, wholesale_price, lead_time_days)
+                VALUES (%s, %s, %s, %s)
+            """
+            cursor.execute(query, (product_id, supplier_id, wholesale_price, lead_time))
+            self.connection.commit()
+            return True
+        except mysql.connector.Error as err:
+            print(f"Error: could not create link. Details: {err}")
+            return False
         finally:
             cursor.close()
 
     def get_all_product_suppliers(self):
-        if self.connection is None or not self.connection.is_connected():
-            print("No connection! Opening it now...")
-            self.open_connection()
+        if not self.ensure_connection():
+            return []
+
         cursor = self.connection.cursor()
-        query = "SELECT p.NAME , s.NAME , ps.WHOLESALE_PRICE , ps.LEAD_TIME_DAYS FROM PRODUCT_SUPPLIERS ps JOIN PRODUCTS p ON ps.PRODUCT_ID = p.ID JOIN SUPPLIERS s ON ps.SUPPLIER_ID = s.SUPPLIER_ID;"
+        query = """
+            SELECT p.name, s.name, ps.wholesale_price, ps.lead_time_days
+            FROM product_suppliers ps
+            JOIN products p ON ps.product_id = p.id
+            JOIN suppliers s ON ps.supplier_id = s.id;
+        """
         try:
             cursor.execute(query)
-            result = cursor.fetchall()
-            return result
+            return cursor.fetchall()
         except mysql.connector.Error as err:
             print(f"Error: {err}")
             return []
-
         finally:
             cursor.close()
 
-
-
     def close_connection(self):
-
         if self.connection and self.connection.is_connected():
             self.connection.close()
-            print("MySQL connection closed")
-
-
+            print("MySQL connection closed.")
 
 
 if __name__ == "__main__":
     db = DatabaseManager(
-        host="localhost",
-        user="root",
-        pwd="YOUR_PASSWORD_HERE",
-        db_name="inventory_system"
+        host=os.getenv("DB_HOST", "localhost"),
+        user=os.getenv("DB_USER", "root"),
+        password=os.getenv("DB_PASSWORD", "your_password_here"),
+        db_name=os.getenv("DB_NAME", "inventory_system")
     )
 
     while True:
-        print("\n--- Inventory System ---")
+        print("\n===== Inventory System =====")
         print("1. View Products")
         print("2. Add Product")
         print("3. Update Stock")
@@ -205,117 +259,163 @@ if __name__ == "__main__":
         print("8. View Product-Supplier Links")
         print("0. Exit")
 
-        choice = input("Select an option: ")
+        choice = input("Select an option: ").strip()
 
         if choice == "1":
-            raw_data = db.get_all_products()
-            for row in raw_data:
-                print(Product(*row))  # pass all row items to Product
+            products = db.get_all_products()
+            if not products:
+                print("No products found.")
+            else:
+                print("\n--- Products ---")
+                for row in products:
+                    print(Product(*row))
 
         elif choice == "2":
             sku = input("SKU: ").strip()
             if not sku:
-                print("Error: SKU cannot be empty")
+                print("Error: SKU cannot be empty.")
                 continue
-            elif not sku[0].isalpha() :
-                print("Error: SKU must start with a letter (A-Z)")
+            if not sku[0].isalpha():
+                print("Error: SKU must start with a letter.")
                 continue
+
             try:
-                qty = int(input("Quantity: "))
+                quantity = int(input("Quantity: "))
             except ValueError:
-                print("Error: You must enter an integer for quantity")
+                print("Error: quantity must be an integer.")
                 continue
-            if qty < 0:
-                print("Error: Quantity shouldn't be < 0")
+
+            if quantity < 0:
+                print("Error: quantity cannot be negative.")
                 continue
+
             name = input("Name: ").strip()
             if not name:
-                print("Error: Name can't be empty")
+                print("Error: name cannot be empty.")
                 continue
-            if not name.replace(" ", "").isalnum():
-                print("Error: Special characters (symbols) are not allowed.")
-                continue
+
             try:
                 price = float(input("Price: "))
             except ValueError:
-                print("Error: price should be a number")
+                print("Error: price must be a number.")
                 continue
+
             if price <= 0:
-                print("price should be a positive number")
+                print("Error: price must be greater than 0.")
                 continue
-            if db.insert_product(sku, qty, name, price):
-                print(f"Success: {name} added to inventory")
+
+            if db.insert_product(sku, quantity, name, price):
+                print(f"Product '{name}' added successfully.")
             else:
-                print(f"Failure: Could not add product(SKU might be a duplicate)")
+                print("Could not add product. SKU may already exist.")
 
         elif choice == "3":
             try:
-                pid = int(input("Product ID: "))
-                amt = int(input("Amount to add/remove: "))
-                result = db.update_stock(pid, amt)
-                if result > 0:
-                    print(f"Success! Updated stock for ID {pid}.")
-                else:
-                    print(f"Error: Product with ID {pid} was not found.")
+                product_id = int(input("Product ID: "))
+                amount = int(input("Amount to add/remove: "))
             except ValueError:
-                print("Error: Please enter valid numbers.")
+                print("Error: please enter valid integers.")
                 continue
+
+            result = db.update_stock(product_id, amount)
+
+            if result > 0:
+                print(f"Stock updated for product ID {product_id}.")
+            elif result == -1:
+                print(f"Error: product ID {product_id} was not found.")
+            elif result == -2:
+                print("Error: stock cannot go below zero.")
+            elif result == -99:
+                print("Error: could not connect to the database.")
+            else:
+                print("Stock update failed.")
+
         elif choice == "4":
             try:
-                pid = int(input("ID to delete: "))
-                result = db.delete(pid)
-                if result > 0:
-                    print(f"Success: Product {pid} deleted.")
-                else:
-                    print(f"Error: Product ID {pid} does not exist in the database.")
+                product_id = int(input("Product ID to delete: "))
             except ValueError:
-                print("Error: Please enter an existing ID")
+                print("Error: please enter a valid product ID.")
                 continue
+
+            confirm = input(f"Are you sure you want to delete product {product_id}? (y/n): ").strip().lower()
+            if confirm != "y":
+                print("Delete cancelled.")
+                continue
+
+            result = db.delete_product(product_id)
+            if result > 0:
+                print(f"Product {product_id} deleted successfully.")
+            else:
+                print(f"Error: product ID {product_id} does not exist or could not be deleted.")
+
         elif choice == "5":
             suppliers = db.get_all_suppliers()
-            for supplier in suppliers:
-                print(Supplier(*supplier))
+            if not suppliers:
+                print("No suppliers found.")
+            else:
+                print("\n--- Suppliers ---")
+                for row in suppliers:
+                    print(Supplier(*row))
+
         elif choice == "6":
-            email = input("Enter the Email: ")
+            email = input("Email: ").strip()
             if not email:
-                print("Error: Empty email is not allowed")
+                print("Error: email cannot be empty.")
                 continue
             if " " in email:
-                print("Error: Email should not contain spaces")
+                print("Error: email cannot contain spaces.")
                 continue
-            if not email[0].isalpha():
-                print("Error: Email should start with A-z or a-z")
+            if "@" not in email or "." not in email:
+                print("Error: invalid email format.")
                 continue
-            name = input("Enter the Name: ").strip()
-            if not name:
-                print("Error: Name can't be empty")
-                continue
-            db.insert_supplier(name,email)
 
-        elif choice == '7':
+            name = input("Name: ").strip()
+            if not name:
+                print("Error: name cannot be empty.")
+                continue
+
+            if db.insert_supplier(name, email):
+                print(f"Supplier '{name}' added successfully.")
+            else:
+                print("Could not add supplier.")
+
+        elif choice == "7":
             try:
                 print("\n--- Link Product to Supplier ---")
-                p_id = int(input("Enter Product ID: "))
-                s_id = int(input("Enter Supplier ID: "))
-                price = float(input("Enter Wholesale Price: "))
-                days = int(input("Enter Lead Time (Days): "))
-
-                db.link_product_to_supplier(p_id, s_id, price, days)
-
+                product_id = int(input("Product ID: "))
+                supplier_id = int(input("Supplier ID: "))
+                wholesale_price = float(input("Wholesale Price: "))
+                lead_time = int(input("Lead Time (Days): "))
             except ValueError:
-                print("Error: Invalid input. Please enter numbers for IDs, price, and days.")
+                print("Error: please enter valid numbers.")
+                continue
+
+            if wholesale_price <= 0:
+                print("Error: wholesale price must be greater than 0.")
+                continue
+
+            if lead_time < 0:
+                print("Error: lead time cannot be negative.")
+                continue
+
+            if db.link_product_to_supplier(product_id, supplier_id, wholesale_price, lead_time):
+                print("Product linked to supplier successfully.")
+            else:
+                print("Could not create product-supplier link.")
 
         elif choice == "8":
             links = db.get_all_product_suppliers()
             if not links:
-                print("\n[!] No links found in the database.")
+                print("No product-supplier links found.")
             else:
-                print("\n--- Current Product-Supplier Links ---")
+                print("\n--- Product-Supplier Links ---")
                 for row in links:
                     print(ProductSupplier(*row))
 
         elif choice == "0":
             db.close_connection()
+            print("Goodbye.")
             break
+
         else:
-            print("\n[!] Invalid input. Please enter a number between 0 and 8.")
+            print("Invalid option. Please enter a number between 0 and 8.")
