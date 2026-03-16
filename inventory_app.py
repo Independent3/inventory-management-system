@@ -48,7 +48,32 @@ class ProductSupplier:
             f"Product: {self.product_name} | Supplier: {self.supplier_name} | "
             f"Wholesale Price: {self.wholesale_price:.2f} | Lead Time: {self.lead_time} days"
         )
+class Restock:
+    def __init__(self, restock_id , product_id, supplier_id, date , quantity_added):
+        self.restock_id = restock_id
+        self.product_id = product_id
+        self.supplier_id = supplier_id
+        self.date = date
+        self.quantity_added = quantity_added
 
+    def __str__(self):
+        return (
+            f"Restock: {self.restock_id} | Product: {self.product_id} | "
+            f"Supplier: {self.supplier_id} | Date: {self.date} | "
+            f"Quantity_Added: {self.quantity_added}"
+        )
+class Orders:
+    def __init__(self, order_id, product_id, date_timestamp, quantity_sold):
+        self.order_id = order_id
+        self.product_id = product_id
+        self.date_timestamp = date_timestamp
+        self.quantity_sold = quantity_sold
+
+    def __str__(self):
+        return(
+        f"Order: {self.order_id} | Product: {self.product_id} | "
+        f"Date: {self.date_timestamp} | Sold: {self.quantity_sold}"
+        )
 
 class DatabaseManager:
     def __init__(self, host, user, password, db_name):
@@ -184,7 +209,7 @@ class DatabaseManager:
 
         cursor = self.connection.cursor()
         try:
-            query = "SELECT id, name, email FROM suppliers;"
+            query = "SELECT supplier_id, name, email FROM suppliers;"
             cursor.execute(query)
             return cursor.fetchall()
         except mysql.connector.Error as err:
@@ -222,7 +247,7 @@ class DatabaseManager:
             SELECT p.name, s.name, ps.wholesale_price, ps.lead_time_days
             FROM product_suppliers ps
             JOIN products p ON ps.product_id = p.id
-            JOIN suppliers s ON ps.supplier_id = s.id;
+            JOIN suppliers s ON ps.supplier_id = s.supplier_id;
         """
         try:
             cursor.execute(query)
@@ -232,6 +257,75 @@ class DatabaseManager:
             return []
         finally:
             cursor.close()
+
+    def unlink_product_from_supplier(self , product_id , supplier_id):
+        if not self.ensure_connection():
+            return 0
+        cursor = self.connection.cursor()
+        try:
+            query = "DELETE FROM Product_Suppliers WHERE product_id = %s AND supplier_id = %s;"
+            cursor.execute(query, (product_id, supplier_id,))
+            self.connection.commit()
+            return cursor.rowcount
+        except mysql.connector.Error as err:
+            print(f"Error: {err}")
+            return 0
+        finally:
+            cursor.close()
+
+    def restock_product(self, product_id , supplier_id , quantity_added):
+        if not self.ensure_connection():
+            return 0
+        cursor = self.connection.cursor()
+        try:
+            if quantity_added > 0:
+                query = """
+                    INSERT INTO RESTOCK (PRODUCT_ID , SUPPLIER_ID , QUANTITY_ADDED) VALUES 
+                    (%s , %s , %s)
+                    """
+                cursor.execute(query , (product_id , supplier_id , quantity_added,))
+                cursor.execute("UPDATE products SET quantity = quantity + %s WHERE id = %s;",
+                (quantity_added, product_id))
+                self.connection.commit()
+            else:
+                return -1
+            return 1
+        except mysql.connector.Error as err:
+            print(f"Error: {err}")
+            return 0
+        finally:
+            cursor.close()
+
+    def place_order(self, product_id, quantity_sold):
+        if not self.ensure_connection():
+            return 0
+        cursor = self.connection.cursor()
+        try:
+            query = "SELECT Quantity from PRODUCTS WHERE id = %s"
+            cursor.execute(query,(product_id,))
+            row = cursor.fetchone()
+            if row is not None:
+                quantity = row[0]
+                if quantity_sold > quantity:
+                    return -2
+                else:
+                    query = "INSERT INTO Orders (product_id, quantity_sold) VALUES (%s, %s);"
+                    cursor.execute(query, (product_id, quantity_sold))
+                    query = "UPDATE products  SET quantity = quantity - %s WHERE id = %s"
+                    cursor.execute(query,(quantity_sold,product_id,))
+                    self.connection.commit()
+                    return 1
+            else:
+                return -1
+        except mysql.connector.Error:
+            return 0
+        finally:
+            cursor.close()
+
+
+
+
+
 
     def close_connection(self):
         if self.connection and self.connection.is_connected():
@@ -257,6 +351,9 @@ if __name__ == "__main__":
         print("6. Add Supplier")
         print("7. Link Product to Supplier")
         print("8. View Product-Supplier Links")
+        print("9. Unlink Product from Supplier")
+        print("10. Restock Product")
+        print("11. Place Order")
         print("0. Exit")
 
         choice = input("Select an option: ").strip()
@@ -412,10 +509,65 @@ if __name__ == "__main__":
                 for row in links:
                     print(ProductSupplier(*row))
 
+        elif choice == "9":
+            try:
+                product_id = int(input("Product ID: "))
+                supplier_id = int(input("Supplier ID: "))
+            except ValueError:
+                print("Error: Product id and Supplier id must be integers")
+                continue
+            result = db.unlink_product_from_supplier(product_id, supplier_id)
+            if result > 0:
+                print("Link Removed successfully")
+            else:
+                print("Error: Link not found")
+
+        elif choice == "10":
+            try:
+                print("\n--- Restock ---")
+                product_id = int(input("Product ID: "))
+                supplier_id = int(input("Supplier ID: "))
+                quantity_added = int(input("Quantity to add: "))
+                if quantity_added <= 0:
+                    print(f"Error: Quantity must be greater than zero , your input {quantity_added} is not valid")
+                    continue
+            except ValueError:
+                print("Error: Product ID , Supplier ID and Quantity must be integers")
+                continue
+            result = db.restock_product(product_id, supplier_id, quantity_added)
+            if  result == 1:
+                print(f"Success! Quantity that was added {quantity_added}")
+            elif result == -1:
+                print("Invalid Quantity")
+            else:
+                print("Database Error")
+
+        elif choice == "11":
+            try:
+                print("\n--- Order ---")
+                product_id = int(input("Product ID: "))
+                quantity_sold = int(input("Quantity: "))
+                if quantity_sold <= 0:
+                    print("Error: Invalid quantity , must be greater than 0")
+                    continue
+                else:
+                    result = db.place_order(product_id, quantity_sold)
+                    if result == 1:
+                        print(f"Success! Sold {quantity_sold} units.")
+                    elif result == -1:
+                        print("Error: Product not found.")
+                    elif result == -2:
+                        print("Error: Not enough stock available.")
+                    else:
+                        print("Database error.")
+            except ValueError:
+                print(f"Error: Product ID and Quantity must be integers")
+                continue
+
         elif choice == "0":
             db.close_connection()
             print("Goodbye.")
             break
 
         else:
-            print("Invalid option. Please enter a number between 0 and 8.")
+            print("Invalid option. Please enter a number between 0 and 11.")
