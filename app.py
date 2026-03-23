@@ -107,7 +107,8 @@ def get_orders():
         return {"orders": orders}, 200
 
     except Exception as e:
-        return {"error": str(e)}, 500
+        print(f"Error: {e}")
+        return {"error": "Database error"}, 500
     finally:
         cursor.close()
 
@@ -137,7 +138,8 @@ def get_restocks():
         return {"restocks": restocks}, 200
 
     except Exception as e:
-        return {"error": str(e)}, 500
+        print(f"Error: {e}")
+        return {"error": "Database error"}, 500
     finally:
         cursor.close()
 
@@ -317,4 +319,4 @@ def internal_error(error):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="127.0.0.1", port=5000)
+    app.run(debug=False, host="127.0.0.1", port=5000)
