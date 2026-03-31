@@ -88,7 +88,9 @@ The application provides a RESTful API for managing products, suppliers, stock l
 - Python  
 - Flask  
 - MySQL  
-- REST API  
+- REST API
+- Docker / docker-compose
+- GitHub Actions CI/CD
 - Postman (testing)
 
 ---
@@ -111,6 +113,25 @@ DB_PASSWORD=your_password_here
 DB_NAME=inventory_system
 ```
 
+3) ## 🐳 Option 1 - Docker Setup (Recommended)
+
+i) Clone the repository
+   
+ii) Create .env file based on .env.example
+   
+   - Set DB_HOST=db (not localhost)
+   
+4) Run with Docker:
+
+   docker-compose up --build
+
+
+5) Access the API:
+   ```
+      http://127.0.0.1:5000/
+   ```
+
+## Option 2 - Manual Setup
 3) Install Dependencies
 
 ```bash
@@ -169,8 +190,6 @@ Aligned schema with application logic and verified using DESCRIBE queries.
 -Authentication system (JWT)
 
 -Frontend dashboard (React / HTML)
-
--Docker containerization
 
 -API documentation (Swagger)
 
