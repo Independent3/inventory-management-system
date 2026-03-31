@@ -14,7 +14,9 @@ The application provides a RESTful API for managing products, suppliers, stock l
 ✅ Restocking System with supplier tracking  
 ✅ Historical Tracking (Orders & Restocks)  
 ✅ REST API with structured JSON responses  
-✅ Input Validation & Error Handling  
+✅ Input Validation & Error Handling
+✅ Docker containerization with docker-compose  
+✅ GitHub Actions CI/CD pipeline
 
 ---
 
