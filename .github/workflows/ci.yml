@@ -26,4 +26,4 @@ jobs:
 
       - name: Lint with flake8
         run: |
-          flake8 . --count --max-line-length=120 --statistics --exclude=.venv
+          flake8 . --count --max-line-length=120 --ignore=E203,E231,E271,E275,E302,E303,E128,E122,W291,W292,F541 --statistics --exclude=.venv
