@@ -9,6 +9,7 @@ services:
       - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+      - ./inventory_management_system.sql:/docker-entrypoint-initdb.d/init.sql
 
   web:
     build: .
