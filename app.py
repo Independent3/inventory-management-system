@@ -49,7 +49,7 @@ def get_products():
             "price": row[4],
         })
 
-    return {"products": products}, 200 ## returning dictionary (easier to add features later like pagination)
+    return {"products": products}, 200 #returning dictionary (easier to add features later like pagination)
 
 
 @app.route("/suppliers", methods=["GET"])
@@ -169,7 +169,7 @@ def add_product():
     if price <= 0:
         return {"error": "Price must be greater than 0"}, 400
 
-    success = db.insert_product(sku, quantity, name, price) ## the result is true or false depending the success or not
+    success = db.insert_product(sku, quantity, name, price) #the result is true or false depending the success or not
 
     if success:
         return {"message": "Product added successfully"}, 201
@@ -303,7 +303,7 @@ def place_order():
         return {"error": "Database error"}, 500
 
 
-@app.errorhandler(404) ## error handlers for flask for errors it generates itself
+@app.errorhandler(404) #error handlers for flask for errors it generates itself
 def not_found(error):
     return {"error": "Endpoint not found"}, 404
 

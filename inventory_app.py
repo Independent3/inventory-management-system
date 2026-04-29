@@ -115,7 +115,7 @@ class DatabaseManager:
             return cursor.fetchall()
         except mysql.connector.Error as err:
             print(f"Query failed: {err}")
-            return [] # Return empty list instead of None (safer)
+            return [] #Return empty list instead of None (safer)
         finally:
             cursor.close()
 
@@ -149,7 +149,7 @@ class DatabaseManager:
         finally:
             cursor.close()
 
-    def delete_product(self, product_id): ##need cascade delete or unlink to work if the product is linked
+    def delete_product(self, product_id): #need cascade delete or unlink to work if the product is linked
         if not self.ensure_connection():
             return 0
 
