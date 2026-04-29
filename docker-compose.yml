@@ -1,25 +1,25 @@
 services:
   db:
-    image: mysql:8.0
-    restart: always
+    image: mysql:8.0   #pulls official Mysql 8.0 Image
+    restart: always    #if MySQL crashes / Flask starts before MySQL is ready --> restart
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
-      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}    #Passing environmental variables to the MySQL container
+      MYSQL_DATABASE: ${DB_NAME}             #That way database is created/ ${} pulls values from .env file
     ports:
-      - "3307:3306"
+      - "3307:3306"                          #Maps port 3307 (my machine) to port 3306 inside container
     volumes:
-      - mysql_data:/var/lib/mysql
-      - ./inventory_management_system.sql:/docker-entrypoint-initdb.d/init.sql
+      - mysql_data:/var/lib/mysql            #persists database data to survive container restarts
+      - ./inventory_management_system.sql:/docker-entrypoint-initdb.d/init.sql #first time initialization
 
   web:
-    build: .
-    restart: always
-    ports:
-      - "5000:5000"
+    build: .                                 #instead of pulling an image, build one using DockerFile
+    restart: always                          #Flask might start before MySQL is ready and crash
+    ports:                                   #restart: always keeps retrying until MySQL is up
+      - "5000:5000"                          #Map port 5000 (my machine) to port 5000 in the container
     env_file:
-      - .env
-    depends_on:
+      - .env                                 #passing all the variables from .env file to flask container
+    depends_on:                              #Start db container before web container
       - db
 
-volumes:
-  mysql_data:
+volumes:                                    #Declares the named volume used by the db service
+  mysql_data:                               #Docker manages this volume,data persists even if containers are removed.
