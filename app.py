@@ -260,6 +260,7 @@ def restock_product():
         product_id = int(data.get("product_id"))
         supplier_id = int(data.get("supplier_id"))
         quantity = int(data.get("quantity"))
+
     except (TypeError, ValueError):
         return {"error": "Product ID, supplier ID and quantity must be integers"}, 400
 

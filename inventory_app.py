@@ -280,7 +280,7 @@ class DatabaseManager:
         try:
             if quantity_added > 0:
                 query = """
-                    INSERT INTO RESTOCK (PRODUCT_ID , SUPPLIER_ID , QUANTITY_ADDED) VALUES 
+                    INSERT INTO restock (product_id , supplier_id , quantity_added) VALUES 
                     (%s , %s , %s)
                     """
                 cursor.execute(query , (product_id , supplier_id , quantity_added,))
@@ -290,7 +290,7 @@ class DatabaseManager:
             else:
                 return -1
             return 1
-        except mysql.connector.Error as err:
+        except Exception as err:
             print(f"Error: {err}")
             return 0
         finally:
@@ -301,7 +301,7 @@ class DatabaseManager:
             return 0
         cursor = self.connection.cursor()
         try:
-            query = "SELECT Quantity from PRODUCTS WHERE id = %s"
+            query = "SELECT quantity from products WHERE id = %s"
             cursor.execute(query,(product_id,))
             row = cursor.fetchone()
             if row is not None:
@@ -309,7 +309,7 @@ class DatabaseManager:
                 if quantity_sold > quantity:
                     return -2
                 else:
-                    query = "INSERT INTO Orders (product_id, quantity_sold) VALUES (%s, %s);"
+                    query = "INSERT INTO orders (product_id, quantity_sold) VALUES (%s, %s);"
                     cursor.execute(query, (product_id, quantity_sold))
                     query = "UPDATE products  SET quantity = quantity - %s WHERE id = %s"
                     cursor.execute(query,(quantity_sold,product_id,))
